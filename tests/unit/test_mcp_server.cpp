@@ -65,7 +65,7 @@ TEST_F(McpServerTest, Initialize_ReturnsServerInfo)
     auto resp = m_server->handleMessage(makeRequest("initialize"));
     ASSERT_TRUE(resp.contains("result"));
     EXPECT_EQ(resp["result"]["serverInfo"]["name"], "renderdoc-mcp");
-    EXPECT_EQ(resp["result"]["protocolVersion"], "2025-03-26");
+    EXPECT_EQ(resp["result"]["protocolVersion"], "2025-06-18");
 }
 
 TEST_F(McpServerTest, Initialize_HasToolsCapability)
@@ -228,10 +228,33 @@ TEST_F(McpServerTest, Shutdown_ReturnsEmptyResult)
     EXPECT_TRUE(resp["result"].is_object());
 }
 
-TEST_F(McpServerTest, Initialize_UnsupportedProtocolVersion_ReturnsError)
+TEST_F(McpServerTest, Initialize_UnsupportedProtocolVersion_NegotiatesLatest)
 {
     auto resp = m_server->handleMessage(makeRequest("initialize",
         {{"protocolVersion", "9999-01-01"}}));
+    ASSERT_TRUE(resp.contains("result"));
+    EXPECT_EQ(resp["result"]["protocolVersion"], "2025-06-18");
+}
+
+TEST_F(McpServerTest, Initialize_CodexProtocolVersion_CompletesHandshakeAndCallsTool)
+{
+    auto resp = m_server->handleMessage(makeRequest("initialize",
+        {{"protocolVersion", "2025-06-18"}}));
+    ASSERT_TRUE(resp.contains("result"));
+    EXPECT_EQ(resp["result"]["protocolVersion"], "2025-06-18");
+    m_server->handleMessage({{"jsonrpc", "2.0"}, {"method", "notifications/initialized"}});
+    auto tools = m_server->handleMessage(makeRequest("tools/list", json::object(), 2));
+    ASSERT_EQ(tools["result"]["tools"].size(), 3u);
+    auto call = m_server->handleMessage(makeRequest("tools/call",
+        {{"name", "echo_tool"}, {"arguments", {{"msg", "codex"}}}}, 3));
+    ASSERT_TRUE(call.contains("result"));
+    EXPECT_FALSE(call["result"].value("isError", false));
+    EXPECT_EQ(json::parse(call["result"]["content"][0]["text"].get<std::string>())["echo"], "codex");
+}
+
+TEST_F(McpServerTest, Initialize_NonStringProtocolVersion_ReturnsInvalidParams)
+{
+    auto resp = m_server->handleMessage(makeRequest("initialize", {{"protocolVersion", 123}}));
     ASSERT_TRUE(resp.contains("error"));
     EXPECT_EQ(resp["error"]["code"], -32602);
 }

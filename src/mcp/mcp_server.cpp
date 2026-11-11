@@ -145,20 +145,22 @@ json McpServer::handleInitialize(const json& msg)
 {
     json id = msg.value("id", json(nullptr));
 
-    // Validate client protocol version for compatibility
-    static constexpr const char* kSupportedProtocolVersion = "2025-03-26";
+    // Echo a supported client version, or negotiate our latest supported version.
+    static constexpr const char* kLatestProtocolVersion = "2025-06-18";
+    std::string negotiatedVersion = kLatestProtocolVersion;
     json params = msg.value("params", json::object());
+    if (!params.is_object())
+        return makeError(id, -32602, "Invalid params: expected an object");
     if (params.contains("protocolVersion")) {
+        if (!params["protocolVersion"].is_string())
+            return makeError(id, -32602, "Invalid params: protocolVersion must be a string");
         std::string clientVersion = params["protocolVersion"].get<std::string>();
-        if (clientVersion != kSupportedProtocolVersion) {
-            return makeError(id, -32602,
-                "Unsupported protocol version: " + clientVersion +
-                " (server supports " + kSupportedProtocolVersion + ")");
-        }
+        if (clientVersion == "2025-03-26" || clientVersion == kLatestProtocolVersion)
+            negotiatedVersion = clientVersion;
     }
 
     json result;
-    result["protocolVersion"] = kSupportedProtocolVersion;
+    result["protocolVersion"] = negotiatedVersion;
     result["capabilities"]["tools"] = json::object();
     result["serverInfo"]["name"] = "renderdoc-mcp";
     result["serverInfo"]["version"] = "1.0.0";

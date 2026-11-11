@@ -77,9 +77,14 @@ jobs:
           cmake -G "Visual Studio 17 2022" -A x64 -B build
           -DRENDERDOC_DIR=renderdoc-src
           -DRENDERDOC_BUILD_DIR=renderdoc-src/x64/Development
+          -DBUILD_TESTING=ON
 
       - name: Build release binaries
-        run: cmake --build build --config Release --target renderdoc-mcp renderdoc-cli
+        run: cmake --build build --config Release --target renderdoc-mcp renderdoc-cli test-unit
+
+      - name: Verify MCP protocol negotiation
+        shell: pwsh
+        run: .\build\tests\Release\test-unit.exe --gtest_filter=McpServerTest.*
 
       - name: Smoke test executable
         shell: pwsh
